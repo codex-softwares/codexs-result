@@ -1,5 +1,6 @@
 plugins {
-    id("java")
+    id 'java'
+    id 'maven-publish'
 }
 
 description = 'propolgic server'
@@ -21,4 +22,17 @@ test {
 java {
     sourceCompatibility = JavaVersion.toVersion("11")
     targetCompatibility = JavaVersion.toVersion("11")
+}
+
+publishing {
+    repositories {
+        maven {
+            name = "GitHubPackages"
+            url = "https://maven.pkg.github.com/codex-softwares/codexs-result"
+            credentials {
+                username = System.getenv("GITHUB_ACTOR")
+                password = System.getenv("GITHUB_TOKEN")
+            }
+        }
+    }
 }
