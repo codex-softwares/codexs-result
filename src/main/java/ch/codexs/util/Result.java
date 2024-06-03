@@ -9,6 +9,17 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
+/**
+ * Result enables to handle errors as values instead of exceptions.
+ * This basically a couple of references, one is the regular content, the other is a list of issues.
+ * The invariants are:
+ *  - at least a content or one issue.
+ *  - if there is a content with issues, it's considered successful anyway.
+ *  - it's impossible to access the content without having gone through the potential issues.
+ *
+ * @param <T> The type of the content.
+ * @param <I> The type of the issues.
+ */
 public class Result<T, I> {
 
     private final T content;
@@ -366,7 +377,7 @@ public class Result<T, I> {
          *
          * @param combiner BiFunction to combine the contents if both exist.
          * @return a new {@code Result<V, I>} containing the merged content.
-         * @param <V>
+         * @param <V> the type of the mapped content.
          */
         public <V> Result<V, I> mergeMap(BiFunction<T, U, V> combiner) {
             var concatenatedIssues = Stream.concat(Result.this.issues.stream(), other.issues.stream()).collect(Collectors.toList());
