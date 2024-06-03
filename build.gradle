@@ -1,9 +1,10 @@
 plugins {
-    id 'java'
+    id 'java-library'
     id 'maven-publish'
+    id 'org.jreleaser' version '1.12.0'
 }
 
-description = 'propolgic server'
+description = 'Result monad for management of errors as values'
 group = "ch.codexs.util"
 
 repositories {
@@ -22,29 +23,70 @@ test {
 java {
     sourceCompatibility = JavaVersion.toVersion("11")
     targetCompatibility = JavaVersion.toVersion("11")
+    withJavadocJar()
+    withSourcesJar()
 }
 
 publishing {
     publications {
-        mavenJava(MavenPublication) {
+        maven(MavenPublication) {
+            groupId = 'ch.codexs.util'
+            artifactId = 'result'
+
             from components.java
-        }
-    }
-    repositories {
-        maven {
-            name = "GitHubPackages"
-            url = "https://maven.pkg.github.com/codex-softwares/codexs-result"
-            credentials {
-                username = System.getenv("GITHUB_ACTOR")
-                password = System.getenv("GITHUB_TOKEN")
+
+            pom {
+                name = 'result'
+                description = 'Result monad for management of errors as values'
+                url = 'https://github.com/codex-softwares/codexs-result'
+                inceptionYear = '2024'
+                licenses {
+                    license {
+                        name = 'MIT'
+                        url = 'https://spdx.org/licenses/MIT.html'
+                    }
+                }
+                developers {
+                    developer {
+                        id = 'jocmer-codexs'
+                        name = 'Jocelyn Mérand'
+                    }
+                }
+                scm {
+                    connection = 'scm:git:https://github.com/codex-softwares/codexs-result.git'
+                    developerConnection = 'scm:git:ssh://git@github.com:codex-softwares/codexs-result.git'
+                    url = 'https://github.com/codex-softwares/codexs-result'
+                }
             }
         }
+    }
+
+    repositories {
         maven {
-            name = "OSSRH"
-            url = "https://oss.sonatype.org/service/local/staging/deploy/maven2/"
-            credentials {
-                username = System.getenv("MAVEN_USERNAME")
-                password = System.getenv("MAVEN_PASSWORD")
+            url = layout.buildDirectory.dir('staging-deploy')
+        }
+    }
+}
+
+jreleaser {
+    signing {
+        active = 'ALWAYS'
+        armored = true
+    }
+    deploy {
+        maven {
+            mavenCentral {
+                sonatype {
+                    active = 'ALWAYS'
+                    url = 'https://central.sonatype.com/api/v1/publisher'
+                    stagingRepository('build/staging-deploy')
+                    username = System.getenv("MAVEN_USERNAME")
+                    password = System.getenv("MAVEN_PASSWORD")
+                    authorization = 'BEARER'
+                    applyMavenCentralRules = true
+                    sourceJar = true
+                    javadocJar = true
+                }
             }
         }
     }
