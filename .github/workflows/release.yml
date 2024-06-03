@@ -21,7 +21,7 @@ jobs:
         run: ./gradlew publish
 
       - name: Publish package as a staging dir
-        run: ./gradlew jreleaserFullRelease || cat build/jreleaser/output.properties
+        run: ./gradlew jreleaserFullRelease --stacktrace || tail build/jreleaser/output.properties
         env:
           MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
           MAVEN_PASSWORD: ${{ secrets.MAVEN_PASSWORD }}
