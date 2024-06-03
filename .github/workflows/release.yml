@@ -20,6 +20,13 @@ jobs:
       - name: Publish package as a staging dir
         run: ./gradlew publish
 
+      - name: Install gpg secret key # inspired by https://gist.github.com/sualeh/ae78dc16123899d7942bc38baba5203c
+        run: |
+          # Install gpg secret key
+          cat <(echo -e "${{ secrets.GPG_SECRET_KEY }}") | gpg --batch --import
+          # Verify gpg secret key
+          gpg --list-secret-keys --keyid-format LONG
+
       - name: Publish package as a staging dir
         run: ./gradlew jreleaserFullRelease --stacktrace || tail build/jreleaser/output.properties
         env:
