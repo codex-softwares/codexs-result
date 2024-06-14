@@ -217,6 +217,41 @@ class ResultTest {
     }
 
     @Test
+    void should_transform_using_the_right_function_depending_if_succeeded() {
+        var res = Result.succeeded("This is a success", 1, 2);
+
+        var transformed = res.unwrap(
+                (content, issues) -> {
+                    Assertions.assertEquals("This is a success", content);
+                    Assertions.assertEquals(List.of(1, 2), issues);
+                    return 42d;
+                },
+                (issues) -> {
+                    throw new RuntimeException("Shouldn't be called");
+                }
+        );
+
+        Assertions.assertEquals(42d, transformed);
+    }
+
+    @Test
+    void should_transform_using_the_right_function_depending_if_failed() {
+        var res = Result.<String, Integer>failed( 1, 2);
+
+        var transformed = res.unwrap(
+                (content, issues) -> {
+                    throw new RuntimeException("Shouldn't be called");
+                },
+                (issues) -> {
+                    Assertions.assertEquals(List.of(1, 2), issues);
+                    return 42d;
+                }
+        );
+
+        Assertions.assertEquals(42d, transformed);
+    }
+
+    @Test
     void should_transform_issues_only_if_has_failed() {
         var res = Result.<Integer, String>failed("a", "b")
                 .ifFailedTransform(issues -> String.join("", issues))
@@ -241,13 +276,13 @@ class ResultTest {
     @Test
     void should_transform_only_if_succeeded() {
         var transformed = Result.<Integer, String>succeeded(1).withAddedIssues("a", "b")
-                .unwrap((content, issues) -> content.toString())
+                .ifSucceededTransform((content, issues) -> content.toString())
                 .orElse(issues -> "2");
 
         Assertions.assertEquals("1", transformed);
 
         var extractedIssues = Result.<Integer, String>succeeded(1).withAddedIssues("a", "b")
-                .unwrap((content, issues) -> issues)
+                .ifSucceededTransform((content, issues) -> issues)
                 .orElse(issues -> List.of());
 
         Assertions.assertIterableEquals(extractedIssues, List.of("a", "b"));
@@ -312,6 +347,6 @@ class ResultTest {
     }
 
     private static <T, I> T unwrapContent(Result<T, I> result) {
-        return result.unwrap((content, issues) -> content).orElse(issues -> null);
+        return result.ifSucceededTransform((content, issues) -> content).orElse(issues -> null);
     }
 }

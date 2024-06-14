@@ -300,15 +300,31 @@ public class Result<T, I> {
     }
 
     /**
+     * Give conditional access to content and issues, depending on success.
+     *
+     * @param ifSucceededTransformer {@code BiFunction} to transform the content and the issues.
+     * @param ifFailedTransformer {@code Function} to transform the issues.
+     * @return The result of the transformation.
+     * @param <U> The type of the output of the transformation.
+     */
+    public <U> U unwrap(BiFunction<T, List<I>, U> ifSucceededTransformer, Function<List<I>, U> ifFailedTransformer) {
+        if (hasFailed()) {
+            return ifFailedTransformer.apply(issues);
+        } else {
+            return ifSucceededTransformer.apply(content, issues);
+        }
+    }
+
+    /**
      * Transforms the issues into an output in case of missing content, using the given function.
      * The output is not accessible straight away but is transmitted to the returned {@code ValueTransformer}.
      *
      * @param issueTransformer A function to transform the issues into a value that will be returned if there was no success.
-     * @param <R>              The type of the output resulting from the transformation provided
+     * @param <U>              The type of the output resulting from the transformation provided
      * @return {@code ValueTransformer} - allowing to unwrap the content and transform it into a another value in case of success
      */
-    public <R> ValueTransformer<R> ifFailedTransform(Function<List<I>, R> issueTransformer) {
-        final R valueOutOfIssues;
+    public <U> ValueTransformer<U> ifFailedTransform(Function<List<I>, U> issueTransformer) {
+        final U valueOutOfIssues;
         if (hasFailed()) {
             valueOutOfIssues = issueTransformer.apply(issues);
         } else {
@@ -343,7 +359,7 @@ public class Result<T, I> {
      * @return {@code IssueTransformer<U, I>} enabling the transformation of the issues.
      * @param <U> The type of the mapped content.
      */
-    public <U> IssueTransformer<U, I> unwrap(BiFunction<T, List<I>, U> mapper) {
+    public <U> IssueTransformer<U, I> ifSucceededTransform(BiFunction<T, List<I>, U> mapper) {
         if (!hasFailed()) {
             return new IssueTransformer<>(mapper.apply(content, issues), issues);
         } else {
