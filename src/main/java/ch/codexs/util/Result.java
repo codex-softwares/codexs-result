@@ -96,6 +96,12 @@ public class Result<T, I> {
         );
     }
 
+    /**
+     * A supplier for result content which can throw exceptions.
+     *
+     * @param <T> The type of the content to be wrapped by a {@code Result}.
+     * @param <E> The type of the exceptions the supplier is expected to throw.
+     */
     public interface ThrowingSupplier<T, E extends Throwable> {
         T supply() throws E;
     }
@@ -119,10 +125,10 @@ public class Result<T, I> {
             try {
                 return Result.succeeded(supplier.supply());
             } catch (Throwable exception) {
-                if (throwableClass.isAssignableFrom(throwableClass)) {
+                if (throwableClass.isAssignableFrom(exception.getClass())) {
                     return Result.failed(throwableClass.cast(exception));
                 } else {
-                    throw new RuntimeException(exception);
+                    throw new RuntimeException("Unable to catch", exception);
                 }
             }
         }
@@ -193,6 +199,51 @@ public class Result<T, I> {
         } else {
             var mappingResult = mapper.apply(content);
             return new Result<>(mappingResult.content, concatIssues(issues, mappingResult.issues));
+        }
+    }
+
+    /**
+     * A mapper which transforms a content into another but can throw exceptions.
+     *
+     * @param <T> The type of the upstream content to map.
+     * @param <U> The type of the new content to wrap into a new {@code Result}
+     * @param <E> The type of the exceptions the supplier is expected to throw.
+     */
+    public interface ThrowingMapper<T, U, E extends Throwable> {
+        U map(T upstreamContent) throws E;
+    }
+
+    /**
+     * Maps the content but catching the potential exception that could be thrown by the mapper.
+     *
+     * @param throwableClass The class or the superclass of the thrown exceptions.
+     * @param mapper The function mapping the content, can throw exceptions of th
+     * @param exceptionMapper
+     * @return
+     * @param <U>
+     * @param <E>
+     */
+    public <U, E extends Throwable> Result<U, I> mapCatching(Class<E> throwableClass, ThrowingMapper<T, U, E> mapper, Function<E, I> exceptionMapper) {
+        if (content != null) {
+            try {
+                var mapped = mapper.map(content);
+                return new Result<>(mapped, issues);
+            }
+            catch (Throwable exception) {
+                if (throwableClass.isAssignableFrom(exception.getClass())) {
+                    var mappedException = exceptionMapper.apply(throwableClass.cast(exception));
+                    return failed(
+                            Stream.concat(
+                                    issues.stream(),
+                                    Stream.of(mappedException)
+                            ).collect(Collectors.toList())
+                    );
+                } else {
+                    throw new RuntimeException(exception);
+                }
+            }
+        } else {
+            return failed(issues);
         }
     }
 
@@ -315,6 +366,18 @@ public class Result<T, I> {
         }
     }
 
+
+    /**
+     * Give access to content through an optional.
+     *
+     * @param transformer {@code BiFunction} to transform the content and the issues
+     * @return The result of the transformation.
+     * @param <U> The type of the output of the transformation.
+     */
+    public <U> U unwrap(BiFunction<Optional<T>, List<I>, U> transformer) {
+        return transformer.apply(Optional.ofNullable(content), issues);
+    }
+
     /**
      * Transforms the issues into an output in case of missing content, using the given function.
      * The output is not accessible straight away but is transmitted to the returned {@code ValueTransformer}.
@@ -323,31 +386,36 @@ public class Result<T, I> {
      * @param <U>              The type of the output resulting from the transformation provided
      * @return {@code ValueTransformer} - allowing to unwrap the content and transform it into a another value in case of success
      */
-    public <U> ValueTransformer<U> ifFailedTransform(Function<List<I>, U> issueTransformer) {
+    public <U> ContentTransformer<U> ifFailedTransform(Function<List<I>, U> issueTransformer) {
         final U valueOutOfIssues;
         if (hasFailed()) {
             valueOutOfIssues = issueTransformer.apply(issues);
         } else {
             valueOutOfIssues = null;
         }
-        return new ValueTransformer<>(valueOutOfIssues);
+        return new ContentTransformer<>(valueOutOfIssues);
     }
 
-    public class ValueTransformer<R> {
-        R upstreamValue;
+    /**
+     * Transformer for the content.
+     *
+     * @param <R>
+     */
+    public class ContentTransformer<R> {
+        R upstreamContent;
 
-        ValueTransformer(R upstreamValue) {
-            this.upstreamValue = upstreamValue;
+        ContentTransformer(R upstreamContent) {
+            this.upstreamContent = upstreamContent;
         }
 
         /**
          * Give access to both the content and the issues in order to build an output.
          *
-         * @param valuetransformer The function to map both the content and the issues.
+         * @param contentTransformer The function to map both the content and the issues.
          * @return The mapping result.
          */
-        public R orElseUnwrap(BiFunction<T, List<I>, R> valuetransformer) {
-            return Optional.ofNullable(this.upstreamValue).orElseGet(() -> valuetransformer.apply(content, issues));
+        public R orElseUnwrap(BiFunction<T, List<I>, R> contentTransformer) {
+            return Optional.ofNullable(this.upstreamContent).orElseGet(() -> contentTransformer.apply(content, issues));
         }
     }
 
@@ -380,6 +448,11 @@ public class Result<T, I> {
         return Objects.hash(content, issues);
     }
 
+    /**
+     * Fluent combiner for two results.
+     *
+     * @param <U> The type of the resulting content.
+     */
     public final class BiCombiner<U> {
 
         private final Result<U, I> other;
@@ -405,6 +478,13 @@ public class Result<T, I> {
             }
         }
 
+        /**
+         * Merges the content of the callee and another result into one.
+         *
+         * @param combiner BiFunction to combine the contents if both exist.
+         * @return a new {@code Result<V, I>} containing the merged content.
+         * @param <V> the type of the mapped content.
+         */
         public <V> Result<V, I> mergeFlatMap(BiFunction<T, U, Result<V, I>> combiner) {
             var concatenatedIssues = Stream.concat(Result.this.issues.stream(), other.issues.stream()).collect(Collectors.toList());
 
@@ -450,6 +530,9 @@ public class Result<T, I> {
         return new Result<>(values, issues);
     }
 
+    /**
+     * Class to fluently access the content.
+     */
     public abstract class ValueProcessor {
 
         /**
@@ -475,6 +558,9 @@ public class Result<T, I> {
         }
     }
 
+    /**
+     * Fluent accessor to the content.
+     */
     public class ThenValueProcessor extends ValueProcessor {
 
         /**
@@ -487,6 +573,9 @@ public class Result<T, I> {
         }
     }
 
+    /**
+     * Fluent accessor to the content.
+     */
     public class ElseValueProcessor extends ValueProcessor {
 
         /**
@@ -499,6 +588,9 @@ public class Result<T, I> {
         }
     }
 
+    /**
+     * Fluent transformer for the content and the issues.
+     */
     public static class IssueTransformer<T, I> {
 
         private final T upstreamValue;

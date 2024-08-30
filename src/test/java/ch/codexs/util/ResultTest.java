@@ -79,6 +79,36 @@ class ResultTest {
     }
 
     @Test
+    void should_catch_and_map_exception_to_issue() {
+        var result = Result.<Integer, String>succeeded(2).withAddedIssues("A")
+                .mapCatching(
+                        NullPointerException.class,
+                        content -> {
+                            throw new NullPointerException("B");
+                        },
+                        npe -> npe.getMessage()
+                );
+
+        Assertions.assertTrue(result.hasFailed());
+        Assertions.assertNull(unwrapContent(result));
+        Assertions.assertEquals(List.of("A", "B"), result.issues());
+    }
+
+    @Test
+    void should_mapCatching_map_regularly_when_no_exception() {
+        var result = Result.<Integer, String>succeeded(2).withAddedIssues("A")
+                .mapCatching(
+                        NullPointerException.class,
+                        content -> content + 1,
+                        npe -> {throw new RuntimeException();}
+                );
+
+        Assertions.assertFalse(result.hasFailed());
+        Assertions.assertEquals(3, unwrapContent(result));
+        Assertions.assertEquals(List.of("A"), result.issues());
+    }
+
+    @Test
     void should_not_call_mapper_when_issues_are_missing() {
         var result = Result.<Integer, String>succeeded(1);
 
@@ -249,6 +279,27 @@ class ResultTest {
         );
 
         Assertions.assertEquals(42d, transformed);
+    }
+
+    @Test
+    void should_unwrap_pass_appropriate_optional_to_transformer() {
+        var issues = Result.<String, Integer>failed( 1, 2)
+                .unwrap(
+                        (optContent, passedIssues) -> {
+                            Assertions.assertFalse(optContent.isPresent());
+                            return passedIssues;
+                        }
+                );
+        Assertions.assertEquals(issues, List.of(1, 2));
+
+        var content = Result.succeeded("This is a success", 1, 2)
+                .unwrap(
+                        (optContent, passedIssues) -> {
+                            Assertions.assertEquals(passedIssues, List.of(1, 2));
+                            return optContent.orElseThrow();
+                        }
+                );
+        Assertions.assertEquals(content, "This is a success");
     }
 
     @Test
