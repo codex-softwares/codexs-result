@@ -13,25 +13,28 @@ import java.util.stream.StreamSupport;
  * Result enables to handle errors as values instead of exceptions.
  * This basically a couple of references, one is the regular content, the other is a list of issues.
  * The invariants are:
- *  - at least a content or one issue.
- *  - if there is a content with issues, it's considered successful anyway.
- *  - it's impossible to access the content without having gone through the potential issues.
+ * - at least a content or one issue.
+ * - if there is a content with issues, it's considered successful anyway.
+ * - it's impossible to access the content without having gone through the potential issues.
  *
  * @param <T> The type of the content.
  * @param <I> The type of the issues.
  */
 public class Result<T, I> {
 
-    private final T content;
+    /**
+     * The actual content of the result. When null, the result is considered having failed.
+     */
+    protected final T content;
     private final List<I> issues;
 
     /**
      * Builds a result with a content.
      *
      * @param content non-null reference to the content to hold the returned {@code Result}.
+     * @param <U>     The type of the content.
+     * @param <I>     The type of the issues (empty).
      * @return Result wrapping the provided content.
-     * @param <U> The type of the content.
-     * @param <I> The type of the issues (empty).
      */
     public static <U, I> Result<U, I> succeeded(U content) {
         return new Result<>(Objects.requireNonNull(content), List.of());
@@ -41,12 +44,12 @@ public class Result<T, I> {
     /**
      * Builds a result with a content and issues.
      *
-     * @param content non-null reference to the content to hold the returned {@code Result}.
+     * @param content    non-null reference to the content to hold the returned {@code Result}.
      * @param firstIssue Issue to include.
-     * @param issues Array of additional issues to include.
+     * @param issues     Array of additional issues to include.
+     * @param <U>        The type of the content.
+     * @param <I>        The type of the issues.
      * @return Result wrapping the provided content and issues.
-     * @param <U> The type of the content.
-     * @param <I> The type of the issues.
      */
     @SafeVarargs
     public static <U, I> Result<U, I> succeeded(U content, I firstIssue, I... issues) {
@@ -63,9 +66,9 @@ public class Result<T, I> {
      * Builds a result without a content (failed).
      *
      * @param issues The issues.
+     * @param <U>    The type of the content.
+     * @param <I>    The type of the issues.
      * @return A new {@code Result}
-     * @param <U> The type of the content.
-     * @param <I> The type of the issues.
      */
     public static <U, I> Result<U, I> failed(List<I> issues) {
         if (issues.isEmpty()) {
@@ -78,10 +81,10 @@ public class Result<T, I> {
      * Builds a result without a content (failed).
      *
      * @param firstIssue The first issue.
-     * @param issues The following issues.
+     * @param issues     The following issues.
+     * @param <U>        The type of the content.
+     * @param <I>        The type of the issues.
      * @return A new {@code Result}
-     * @param <U> The type of the content.
-     * @param <I> The type of the issues.
      */
     @SafeVarargs
     public static <U, I> Result<U, I> failed(I firstIssue, I... issues) {
@@ -118,8 +121,8 @@ public class Result<T, I> {
          * If there is a throw exception, and it is expected, it is catch and used as an issue to build the result.
          *
          * @param supplier ThrowingSupplier providing a content. Should not provide {@code null}.
+         * @param <T>      The type of the content.
          * @return Result either containing the supplied content or the catch exception as an issue.
-         * @param <T> The type of the content.
          */
         public <T> Result<T, E> run(ThrowingSupplier<T, E> supplier) {
             try {
@@ -135,10 +138,9 @@ public class Result<T, I> {
     }
 
     /**
-     *
      * @param throwableClass Class of the expected throwable to catch.
+     * @param <E>            The type of throwable to catch.
      * @return Catcher to run the following supplier in a exception safe manner.
-     * @param <E> The type of throwable to catch.
      */
     public static <E extends Throwable> Catcher<E> catching(Class<E> throwableClass) {
         return new Catcher<>(throwableClass);
@@ -148,7 +150,7 @@ public class Result<T, I> {
      * Construct a {@code Result} in a simple way. If the content is null, then the result is considered as failed.
      *
      * @param content An object being the content of the result.
-     * @param issues List of issues, non null.
+     * @param issues  List of issues, non null.
      */
     public Result(T content, List<I> issues) {
         this.content = content;
@@ -177,8 +179,8 @@ public class Result<T, I> {
      * Map the content (if any).
      *
      * @param mapper {@code Function}
+     * @param <U>    The type of the mapped content.
      * @return A new {@code Result} with mapped content.
-     * @param <U> The type of the mapped content.
      */
     public <U> Result<U, I> map(Function<T, U> mapper) {
         return content == null ?
@@ -190,8 +192,8 @@ public class Result<T, I> {
      * Map the content (if any) to another {@code Result}.
      *
      * @param mapper {@code Function} to transform the content (if any).
+     * @param <U>    The type of the mapped content.
      * @return A new {@code Result} with mapped content.
-     * @param <U> The type of the mapped content.
      */
     public <U> Result<U, I> flatMap(Function<T, Result<U, I>> mapper) {
         if (content == null) {
@@ -216,20 +218,19 @@ public class Result<T, I> {
     /**
      * Maps the content but catching the potential exception that could be thrown by the mapper.
      *
-     * @param throwableClass The class or the superclass of the thrown exceptions.
-     * @param mapper The function mapping the content, can throw exceptions of th
+     * @param throwableClass  The class or the superclass of the thrown exceptions.
+     * @param mapper          The function mapping the content, can throw exceptions of th
      * @param exceptionMapper
-     * @return
      * @param <U>
      * @param <E>
+     * @return
      */
     public <U, E extends Throwable> Result<U, I> mapCatching(Class<E> throwableClass, ThrowingMapper<T, U, E> mapper, Function<E, I> exceptionMapper) {
         if (content != null) {
             try {
                 var mapped = mapper.map(content);
                 return new Result<>(mapped, issues);
-            }
-            catch (Throwable exception) {
+            } catch (Throwable exception) {
                 if (throwableClass.isAssignableFrom(exception.getClass())) {
                     var mappedException = exceptionMapper.apply(throwableClass.cast(exception));
                     return failed(
@@ -251,8 +252,8 @@ public class Result<T, I> {
      * Map the issues to transform them.
      *
      * @param mapper {@code Function} to transform the issues (if any).
+     * @param <J>    The type of the mapped issues.
      * @return A new {@code Result} with mapped issues.
-     * @param <J> The type of the mapped issues.
      */
     public <J> Result<T, J> mapIssues(Function<I, J> mapper) {
         return new Result<>(content, issues.stream().map(mapper).collect(Collectors.toList()));
@@ -262,10 +263,10 @@ public class Result<T, I> {
      * Map both the content and the issues to build a new {@code Result} with them.
      *
      * @param contentMapper {@code Function} to transform the content. Will only be called if the content is present.
-     * @param issueMapper {@code Function} to transform the issues. Will only be called if the issues are present.
+     * @param issueMapper   {@code Function} to transform the issues. Will only be called if the issues are present.
+     * @param <U>           The type of the mapped content.
+     * @param <J>           The type of the mapped issues.
      * @return {@code Result} - a new result with the mapped content and issues.
-     * @param <U> The type of the mapped content.
-     * @param <J> The type of the mapped issues.
      */
     public <U, J> Result<U, J> mapBoth(Function<T, U> contentMapper, Function<I, J> issueMapper) {
         var mappedIssues = issues.stream().map(issueMapper).collect(Collectors.toList());
@@ -354,9 +355,9 @@ public class Result<T, I> {
      * Give conditional access to content and issues, depending on success.
      *
      * @param ifSucceededTransformer {@code BiFunction} to transform the content and the issues.
-     * @param ifFailedTransformer {@code Function} to transform the issues.
+     * @param ifFailedTransformer    {@code Function} to transform the issues.
+     * @param <U>                    The type of the output of the transformation.
      * @return The result of the transformation.
-     * @param <U> The type of the output of the transformation.
      */
     public <U> U unwrap(BiFunction<T, List<I>, U> ifSucceededTransformer, Function<List<I>, U> ifFailedTransformer) {
         if (hasFailed()) {
@@ -371,8 +372,8 @@ public class Result<T, I> {
      * Give access to content through an optional.
      *
      * @param transformer {@code BiFunction} to transform the content and the issues
+     * @param <U>         The type of the output of the transformation.
      * @return The result of the transformation.
-     * @param <U> The type of the output of the transformation.
      */
     public <U> U unwrap(BiFunction<Optional<T>, List<I>, U> transformer) {
         return transformer.apply(Optional.ofNullable(content), issues);
@@ -424,8 +425,8 @@ public class Result<T, I> {
      * If the content is absent ({@code hasFailed()} returns true) the chained issue transformation is applied.
      *
      * @param mapper The function to map both the content and the issues.
+     * @param <U>    The type of the mapped content.
      * @return {@code IssueTransformer<U, I>} enabling the transformation of the issues.
-     * @param <U> The type of the mapped content.
      */
     public <U> IssueTransformer<U, I> ifSucceededTransform(BiFunction<T, List<I>, U> mapper) {
         if (!hasFailed()) {
@@ -465,8 +466,8 @@ public class Result<T, I> {
          * Merges the contents of the two results.
          *
          * @param combiner BiFunction to combine the contents if both exist.
+         * @param <V>      the type of the mapped content.
          * @return a new {@code Result<V, I>} containing the merged content.
-         * @param <V> the type of the mapped content.
          */
         public <V> Result<V, I> mergeMap(BiFunction<T, U, V> combiner) {
             var concatenatedIssues = Stream.concat(Result.this.issues.stream(), other.issues.stream()).collect(Collectors.toList());
@@ -482,8 +483,8 @@ public class Result<T, I> {
          * Merges the content of the callee and another result into one.
          *
          * @param combiner BiFunction to combine the contents if both exist.
+         * @param <V>      the type of the mapped content.
          * @return a new {@code Result<V, I>} containing the merged content.
-         * @param <V> the type of the mapped content.
          */
         public <V> Result<V, I> mergeFlatMap(BiFunction<T, U, Result<V, I>> combiner) {
             var concatenatedIssues = Stream.concat(Result.this.issues.stream(), other.issues.stream()).collect(Collectors.toList());
@@ -500,8 +501,8 @@ public class Result<T, I> {
      * Combines this result with another one
      *
      * @param other Result to combine with.
+     * @param <U>   the type of the mapped content.
      * @return BiCombiner to decide how to actually combine values.
-     * @param <U> the type of the mapped content.
      */
     public <U> BiCombiner<U> combineWith(Result<U, I> other) {
         return new BiCombiner<>(other);
@@ -513,9 +514,9 @@ public class Result<T, I> {
      * On the other hand, all the issues are collected, including the one of the failed provided results.
      *
      * @param results Collection of results to combine.
+     * @param <T>     The type of the content.
+     * @param <I>     The type of the issues.
      * @return Result containing the contents of the provided collection of results.
-     * @param <T> The type of the content.
-     * @param <I> The type of the issues.
      */
     public static <T, I> Result<List<T>, I> combineAllSuccessful(Collection<Result<T, I>> results) {
         var issues = results.stream()
@@ -614,5 +615,70 @@ public class Result<T, I> {
                 return issueTransformation.apply(issues);
             }
         }
+    }
+
+    /**
+     * Merge two results of list into one if they are both successful.
+     *
+     * @param r1  the first result to merge
+     * @param r2  the second result to merge
+     * @param <T>
+     * @param <I>
+     * @return a result either containing the collated contained list of a result if they are both successful
+     * or a result with collated issues
+     */
+    public static <T, I> Result<List<T>, I> collateIfAllSuccessful(Result<List<T>, I> r1, Result<List<T>, I> r2) {
+        return r1.combineWith(r2).mergeMap((l1, l2) -> Stream.concat(l1.stream(), l2.stream()).collect(Collectors.toList()));
+    }
+
+    /**
+     * Group the issues and unwrap the contained map into one map.
+     * Beware that apart from knowing that a key was supposed to be present and not finding it in the map is the only way to deduce that the associated result was a failure.
+     * Be also aware that the grouped issues may not be easily attached to the initial keys.
+     *
+     * @param <K> the type of the key
+     * @param <T> the type of the contents
+     * @param <I> the type of the issues
+     * @return A result with all the contents for successful results in one map and all the issues merged into one list.
+     */
+    public static <K, T, I> Result<Map<K, T>, I> combineValues(Map<K, Result<T, I>> mapOfResults) {
+        List<I> allIssues = mapOfResults.values().stream()
+                .flatMap(r -> r.issues().stream())
+                .collect(Collectors.toList());
+
+        Map<K, T> newContent = mapOfResults.entrySet().stream()
+                .filter(entry -> !entry.getValue().hasFailed())
+                .collect(
+                        Collectors.toMap(
+                                Map.Entry::getKey,
+                                entry -> entry.getValue()
+                                        .ifFailedDo(issues -> {
+                                            throw new IllegalStateException("A result which has not failed should have a value");
+                                        })
+                                        .elseGetContent()
+                        )
+                );
+
+        return new Result<>(newContent, allIssues);
+    }
+
+    /**
+     * Collect all the issues in the values, even if the result was a success.
+     *
+     * @param mapOfResults the map of Result to process
+     * @return a map of list of issues, identified by the initial key
+     * @param <K> the type of the key
+     * @param <T> the type of the contents
+     * @param <I> the type of the issues
+     */
+    public static <K, T, I> Map<K, List<I>> collectIssues(Map<K, Result<T, I>> mapOfResults) {
+        return mapOfResults.entrySet().stream()
+                .filter(entry -> !entry.getValue().issues().isEmpty())
+                .collect(
+                        Collectors.toMap(
+                                Map.Entry::getKey,
+                                entry -> entry.getValue().issues()
+                        )
+                );
     }
 }
