@@ -4,6 +4,8 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -386,7 +388,7 @@ class ResultTest {
     }
 
     @Test
-    void should_combine_all_successfull_including_all_the_issues() {
+    void should_combine_all_successful_including_all_the_issues() {
         var result1 = Result.<Integer, String>succeeded(4).withAddedIssues("a", "b");
         var result2 = Result.<Integer, String>failed("c");
         var result3 = Result.<Integer, String>succeeded(7).withAddedIssues("d", "e");
@@ -399,5 +401,32 @@ class ResultTest {
 
     private static <T, I> T unwrapContent(Result<T, I> result) {
         return result.ifSucceededTransform((content, issues) -> content).orElse(issues -> null);
+    }
+
+    @Test
+    void should_traverse_collecting_all_the_issues() {
+        var result1 = Result.<Integer, String>succeeded(4).withAddedIssues("a", "b");
+        var result2 = Result.<Integer, String>failed("c");
+        var result3 = Result.<Integer, String>succeeded(7);
+
+        Map<String, Result<Integer, String>> traversableMap = Map.of(
+                "First", result1,
+                "Second", result2,
+                "Third", result3
+        );
+
+        Result<Map<String, Integer>, String> result = Result.traverse(traversableMap);
+
+        Assertions.assertFalse(result.hasFailed());
+        Assertions.assertEquals(List.of("a", "b", "c"), result.issues());
+
+        Map<String, Integer> resultingMap = result.ifFailedDo(issues -> {
+            throw new IllegalStateException("Unexpected");
+        }).elseGetContent();
+
+        Assertions.assertEquals(Set.of("First", "Third"), resultingMap.keySet());
+        Assertions.assertEquals(4, resultingMap.get("First"));
+        Assertions.assertEquals(7, resultingMap.get("Third"));
+        Assertions.assertNull(resultingMap.get("Second"));
     }
 }

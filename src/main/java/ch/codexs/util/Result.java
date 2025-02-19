@@ -1,10 +1,7 @@
 package ch.codexs.util;
 
 import java.util.*;
-import java.util.function.BiConsumer;
-import java.util.function.BiFunction;
-import java.util.function.Consumer;
-import java.util.function.Function;
+import java.util.function.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
@@ -615,5 +612,36 @@ public class Result<T, I> {
                 return issueTransformation.apply(issues);
             }
         }
+    }
+
+    /**
+     * Group the issues and unwrap the contained map into one map of contents.
+     * Beware that failures will disappear in the process. Then the resulting key set may be smaller than the original one.
+     * Be also aware that the grouped issues may not be easily associated with the initial keys and refer to keys no longer existing.
+     *
+     * @param <K> the type of the key
+     * @param <T> the type of the contents
+     * @param <I> the type of the issues
+     * @return    A successful result with all the contents for successful results in one map and all the issues merged into one list.
+     */
+    public static <K, T, I> Result<Map<K, T>, I> traverse(Map<K, Result<T, I>> mapOfResults) {
+        List<I> allIssues = mapOfResults.values().stream()
+                .flatMap(r -> r.issues().stream())
+                .collect(Collectors.toList());
+
+        Map<K, T> newContent = mapOfResults.entrySet().stream()
+                .filter(entry -> !entry.getValue().hasFailed())
+                .collect(
+                        Collectors.toMap(
+                                Map.Entry::getKey,
+                                entry -> entry.getValue()
+                                        .ifFailedDo(issues -> {
+                                            throw new IllegalStateException("A result which has not failed should have a value");
+                                        })
+                                        .elseGetContent()
+                        )
+                );
+
+        return new Result<>(newContent, allIssues);
     }
 }
